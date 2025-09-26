@@ -1,0 +1,76 @@
+version: "3.9"
+name: blog-stack
+
+services:
+  app:
+    image: blog-app:latest # 이미지 이름
+    container_name: my-blog # 컨테이너 이름
+    build:
+      context: ./app # app 파일 밑에는 blog가 있음.
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment: # 환경 변수 (linux에 정의)
+      TZ: Asia/Seoul
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/my_blog
+      SPRING_DATASOURCE_USERNAME: user1
+      SPRING_DATASOURCE_PASSWORD: "1234"  #{SPRING_DATASOURCE_PASSWORD} 이런식으로 sprint yml에서 사용함.
+    depends_on:
+      db:
+        condition: service_healthy # db service 가 살아있을 때
+    networks: [app-net]
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: 3
+
+  db:
+    image: my-postgres:17.6
+    container_name: my-postgres
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+    environment:
+      TZ: Asia/Seoul
+      POSTGRES_DB: my_blog
+      POSTGRES_USER: user1
+      POSTGRES_PASSWORD: "1234"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user1 -d my_blog" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks: [ app-net ]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  app-net:
+    name: app-net
+#    external: true # 기존 네트워크 사용을 하고싶을 때
+
+volumes:
+  pgdata:
+
+# 실행 스크립트
+# docker compose build
+# docker compose up -d
